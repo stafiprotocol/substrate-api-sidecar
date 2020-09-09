@@ -3,7 +3,7 @@ use core::str::FromStr;
 use log::info;
 use serde_derive::Deserialize;
 use sp_arithmetic::{FixedI128, FixedPointNumber, FixedU128, Perbill};
-use sp_arithmetic_legacy::Fixed128 as Fixed128Legacy;
+// use sp_arithmetic_legacy::Fixed128 as Fixed128Legacy;
 use wasm_bindgen::prelude::*;
 
 type Balance = u128;
@@ -28,38 +28,40 @@ struct Coefficient {
 
 #[derive(Debug)]
 enum Multiplier {
-    V0(Fixed128Legacy),
+    // V0(Fixed128Legacy),
     V1((FixedI128, bool)),
     V2(FixedU128),
 }
 
 impl Multiplier {
-    fn new(inner: &str, spec_name: &str, spec_version: u32) -> Option<Self> {
-        use Multiplier::{V0, V1, V2};
-        let mult = match (spec_name, spec_version) {
-            ("polkadot", 0) => V1((new_i128(inner), true)),
-            ("polkadot", v) if v < 11 => V1((new_i128(inner), false)),
-            ("polkadot", v) if 11 <= v => V2(new_u128(inner)),
+    fn new(inner: &str, _spec_name: &str, _spec_version: u32) -> Option<Self> {
+        // use Multiplier::{V0, V1, V2};
+        // let mult = match (spec_name, spec_version) {
+        //     ("polkadot", 0) => V1((new_i128(inner), true)),
+        //     ("polkadot", v) if v < 11 => V1((new_i128(inner), false)),
+        //     ("polkadot", v) if 11 <= v => V2(new_u128(inner)),
 
-            ("kusama", 1062) => V0(new_legacy_128(inner)),
-            ("kusama", v) if 1062 < v && v < 2011 => V1((new_i128(inner), false)),
-            ("kusama", v) if 2011 <= v => V2(new_u128(inner)),
+        //     ("kusama", 1062) => V0(new_legacy_128(inner)),
+        //     ("kusama", v) if 1062 < v && v < 2011 => V1((new_i128(inner), false)),
+        //     ("kusama", v) if 2011 <= v => V2(new_u128(inner)),
 
-            ("westend", 10) => V0(new_legacy_128(inner)),
-            ("westend", v) if 10 < v && v < 31 => V1((new_i128(inner), false)),
-            ("westend", v) if 31 <= v => V2(new_u128(inner)),
+        //     ("westend", 10) => V0(new_legacy_128(inner)),
+        //     ("westend", v) if 10 < v && v < 31 => V1((new_i128(inner), false)),
+        //     ("westend", v) if 31 <= v => V2(new_u128(inner)),
 
-            _ => {
-                info!("Unsupported runtime: {}#{}", spec_name, spec_version);
-                return None;
-            }
-        };
+        //     _ => {
+        //         info!("Unsupported runtime: {}#{}", spec_name, spec_version);
+        //         return None;
+        //     }
+        // };
+        use Multiplier::{V2};
+        let mult = V2(new_u128(inner));
         Some(mult)
     }
 
     fn calc(&self, balance: Balance) -> Balance {
         match self {
-            Self::V0(mult) => mult.saturated_multiply_accumulate(balance),
+            // Self::V0(mult) => mult.saturated_multiply_accumulate(balance),
             Self::V1((mult, negative_bug)) => {
                 if *negative_bug && mult.is_negative() {
                     // replicate the fixed128 bug where negative coefficients are not considered
@@ -198,6 +200,6 @@ fn new_u128(inner: &str) -> FixedU128 {
     FixedU128::from_inner(u128::from_str(inner).unwrap())
 }
 
-fn new_legacy_128(inner: &str) -> Fixed128Legacy {
-    Fixed128Legacy::from_parts(i128::from_str(inner).unwrap())
-}
+// fn new_legacy_128(inner: &str) -> Fixed128Legacy {
+//     Fixed128Legacy::from_parts(i128::from_str(inner).unwrap())
+// }

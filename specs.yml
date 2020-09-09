@@ -19,6 +19,6 @@ SAS:
   SUBSTRATE:
     WS_URL:
       description: Websocket URL
-      default: ws://127.0.0.1:9944
+      default: wss://scan-rpc.stafi.io
       mandatory: true
       regexp: ^wss?:\/\/.*(:\d{4,5})?$
