@@ -1,10 +1,29 @@
 SAS:
-  EXPRESS:
-    LOG_MODE:
+  LOG:
+    LEVEL:
       description: Log level
-      default: errors
-      regexp: ^error|all|none$
+      default: info
+      regexp: ^error|warn|info|http|verbose|debug|silly$,
 
+    JSON:
+      description: Whether or not to format logs as JSON
+      default: "false"
+      type: boolean
+      regexp: ^true|false$
+
+    FILTER_RPC:
+      description: Wether or not filter out API-WS RPC logging
+      default: "false"
+      type: boolean
+      regexp: ^true|false$
+
+    STRIP_ANSI:
+      description: Whether or not to strip ANSI characters
+      default: "false"
+      type: boolean
+      regexp: ^true|false$
+
+  EXPRESS:
     BIND_HOST:
       description: Network interface we bind to. You *MUST* use 0.0.0.0 if you are using Docker.
       default: 127.0.0.1

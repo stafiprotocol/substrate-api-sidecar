@@ -16,50 +16,42 @@
 
 import { ApiPromise } from '@polkadot/api';
 import { WsProvider } from '@polkadot/rpc-provider';
-import * as bodyParser from 'body-parser';
-import { RequestHandler } from 'express';
+import { json } from 'express';
 
 import App from './App';
-import Config, { ISidecarConfig } from './Config';
+import { Config } from './Config';
 import * as controllers from './controllers';
+import { consoleOverride } from './logging/consoleOverride';
+import { Log } from './logging/Log';
 import * as middleware from './middleware';
 
 async function main() {
-	const configOrNull = Config.GetConfig();
+	const { config } = Config;
 
-	if (!configOrNull) {
-		console.log('Your config is NOT valid, exiting');
-		process.exit(1);
-	}
+	const { logger } = Log;
 
-	const config: ISidecarConfig = configOrNull;
+	// Overide console.{log, error, warn, etc}
+	consoleOverride(logger);
 
 	// Instantiate a web socket connection to the node for basic polkadot-js use
 	const api = await ApiPromise.create({
-		provider: new WsProvider(config.WS_URL),
+		provider: new WsProvider(config.SUBSTRATE.WS_URL),
 		types: {
-			...config.CUSTOM_TYPES,
+			...config.SUBSTRATE.CUSTOM_TYPES,
 		},
 	});
 
+	// Gather some basic details about the node so we can display a nice message
 	const [chainName, { implName }] = await Promise.all([
 		api.rpc.system.chain(),
 		api.rpc.state.getRuntimeVersion(),
 	]);
 
-	console.log(
+	logger.info(
 		`Connected to chain ${chainName.toString()} on the ${implName.toString()} client at ${
-			config.WS_URL
+			config.SUBSTRATE.WS_URL
 		}`
 	);
-
-	// Create array of middleware that is to be mounted before the routes
-	const preMiddleware: RequestHandler[] = [bodyParser.json()];
-	if (config.LOG_MODE === 'errors') {
-		preMiddleware.push(middleware.errorLogger);
-	} else if (config.LOG_MODE === 'all') {
-		preMiddleware.push(middleware.allLogger);
-	}
 
 	// Instantiate v0 controllers (note these will be removed upon the release of v1.0.0)
 	const claimsController = new controllers.v0.v0Claims(api);
@@ -88,60 +80,27 @@ async function main() {
 		metadataController,
 	];
 
-	// Instantiate v1 controllers
-	const blocksController = new controllers.Blocks(api);
-	const accountsStakingPayoutsController = new controllers.AccountsStakingPayouts(
-		api
-	);
-	const accountsBalanceInfoController = new controllers.AccountsBalanceInfo(
-		api
-	);
-	const accountsStakingInfoController = new controllers.AccountsStakingInfo(
-		api
-	);
-	const accountsVestingInfoController = new controllers.AccountsVestingInfo(
-		api
-	);
-	const nodeNetworkController = new controllers.NodeNetwork(api);
-	const nodeVersionController = new controllers.NodeVersion(api);
-	const nodeTransactionPoolController = new controllers.NodeTransactionPool(
-		api
-	);
-	const runtimeCodeController = new controllers.RuntimeCode(api);
-	const runtimeSpecController = new controllers.RuntimeSpec(api);
-	const runtimeMetadataController = new controllers.RuntimeMetadata(api);
-	const transactionDryRunController = new controllers.TransactionDryRun(api);
-	const transactionMaterialController = new controllers.TransactionMaterial(
-		api
-	);
-	const transactionFeeEstimateController = new controllers.TransactionFeeEstimate(
-		api
-	);
-	const transactionSubmitController = new controllers.TransactionSubmit(api);
-	const palletsStakingProgressController = new controllers.palletsStakingProgress(
-		api
-	);
-
 	// Create our App
 	const app = new App({
-		preMiddleware,
+		preMiddleware: [json(), middleware.httpLoggerCreate(logger)],
 		controllers: [
-			blocksController,
-			accountsStakingPayoutsController,
-			accountsBalanceInfoController,
-			accountsStakingInfoController,
-			accountsVestingInfoController,
-			nodeNetworkController,
-			nodeVersionController,
-			nodeTransactionPoolController,
-			runtimeCodeController,
-			runtimeSpecController,
-			runtimeMetadataController,
-			transactionDryRunController,
-			transactionMaterialController,
-			transactionFeeEstimateController,
-			transactionSubmitController,
-			palletsStakingProgressController,
+			new controllers.Blocks(api),
+			new controllers.AccountsStakingPayouts(api),
+			new controllers.AccountsBalanceInfo(api),
+			new controllers.AccountsStakingInfo(api),
+			new controllers.AccountsVestingInfo(api),
+			new controllers.NodeNetwork(api),
+			new controllers.NodeVersion(api),
+			new controllers.NodeTransactionPool(api),
+			new controllers.RuntimeCode(api),
+			new controllers.RuntimeSpec(api),
+			new controllers.RuntimeMetadata(api),
+			new controllers.TransactionDryRun(api),
+			new controllers.TransactionMaterial(api),
+			new controllers.TransactionFeeEstimate(api),
+			new controllers.TransactionSubmit(api),
+			new controllers.palletsStakingProgress(api),
+			new controllers.palletsStorageItem(api),
 			...v0Controllers,
 		],
 		postMiddleware: [
@@ -151,8 +110,8 @@ async function main() {
 			middleware.legacyError,
 			middleware.internalError,
 		],
-		port: config.PORT,
-		host: config.HOST,
+		port: config.EXPRESS.PORT,
+		host: config.EXPRESS.HOST,
 	});
 
 	// Start the server

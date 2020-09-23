@@ -43,14 +43,19 @@ NODE_ENV=sample yarn start
 
 For more information on our configuration manager visit its readme [here](https://gitlab.com/chevdor/confmgr/-/raw/master/README.adoc). See `specs.yaml` to view the env configuration spec.
 
-Following ENV variables can be set:
+### Express server
 
 -   `SAS_EXPRESS_BIND_HOST`: address on which the server will be listening, defaults to `127.0.0.1`.
 -   `SAS_EXPRESS_PORT`: port on which the server will be listening, defaults to `8080`.
 -   `SAS_EXPRESS_LOG_MODE`: enable console logging of "all" HTTP requests, only "errors", or nothing by
     setting it to anything else. LOG_MODE defaults to only "errors".
+
+### Substrate node
+
 -   `SAS_SUBSTRATE_WS_URL`: WebSocket URL to which the RPC proxy will attempt to connect to, defaults to
     `ws://127.0.0.1:9944`.
+
+#### Custom substrate types
 
 If you are connecting to [Substrate Node Template](https://github.com/substrate-developer-hub/substrate-node-template), please add the following custom types in `config/types.json`.
 
@@ -62,6 +67,36 @@ If you are connecting to [Substrate Node Template](https://github.com/substrate-
 	}
 }
 ```
+
+### Logging
+
+-   `SAS_LOG_LEVEL`: the lowest priority log level to surface, defaults to `info`. Tip: set to `http`
+    to see all HTTP requests.
+-   `SAS_LOG_JSON`: wether or not to have logs formatted as JSON, defaults to `false`.
+    Useful when using `stdout` to programmatically process Sidecar log data.
+-   `SAS_LOG_FILTER_RPC`: wether or not to filter polkadot-js API-WS RPC logging, defaults to `false`.
+-   `SAS_LOG_STRIP_ANSI`: wether or not to strip ANSI characters from logs, defaults
+    to `false`. Useful when logging RPC calls with JSON written to transports.
+
+#### Log levels
+
+Log levels in order of decreasing importance are: `error`, `warn`, `info`, `http`, `verbose`, `debug`, `silly`.
+
+| http status code range | log level |
+|------------------------|-----------|
+| `code` < 400           | `http`    |
+| 400 <= `code` < 500    | `warn`    |
+| 500 < `code`           | `error`   |
+
+#### RPC logging
+
+If looking to track raw RPC requests/responses, one can use `yarn start:log-rpc` to turn on polkadot-js's 
+logging. It is recommended to also set `SAS_LOG_STRIP_ANSI=true` to increase the readability of the logging stream.
+
+**N.B.** If running `yarn start:log-rpc`, the NODE_ENV will be set to `test`. In order still run your `.env`
+file you can `symlink` it with `.env.test`. For example you could run
+`ln -s .env.myEnv .env.test && yarn start:log-rpc` to use `.env.myEnv` to set ENV variables. (see linux
+commands `ln` and `unlink` for more info.)
 
 ## Debugging Fee & Payout Calculations
 
@@ -80,6 +115,8 @@ Path descriptions link to controllers for detailed docs with usage information.
 Block IDs may take two forms: a non-negative decimal integer that denotes the block _height_ **or**
 a 32-byte hex string (`0x` followed by 64 hexadecimal digits) that denotes the block _hash_.
 
+-   `/` fetch information on Sidecars version, docs, and available routes.
+
 -   [`/accounts/ADDRESS/staking-payouts` fetch staking payouts for `ADDRESS`.](/src/controllers/accounts/AccountsStakingPayoutsController.ts)
 
 -   [`/accounts/ADDRESS/balance-info` fetch balances info for `ADDRESS`.](src/controllers/accounts/AccountsBalanceInfoController.ts) (Replaces `/balance/ADDRESS`.)
@@ -91,6 +128,8 @@ a 32-byte hex string (`0x` followed by 64 hexadecimal digits) that denotes the b
 -   [`/blocks/{head, BlockId}` fetch the finalized head or block identified by BlockId.](/src/controllers/blocks/BlocksController.ts) (Replaces `/block`.)
 
 -   [`/pallets/staking/progress` fetch information on general staking progress.](src/controllers/pallets/PalletsStakingProgressController.ts) (Replaces `/staking-info`.)
+
+-   [`/pallets/{palletId}/storage/{storageItemId}` fetch the value of a storage item.](src/controllers/pallets/PalletsStorageItemController.ts)
 
 -   [`/node/network` fetch information about the Substrate node's activity in the peer-to-peer network.](src/controllers/node/NodeNetworkController.ts)
 
@@ -185,8 +224,4 @@ curl -s http://0.0.0.0:8080/block | jq
 
 ## Contribute
 
-We welcome contributions. Before submitting your PR, make sure to run the following commands:
-
--   `yarn lint`: Make sure your code follows our linting rules. You can also run `yarn lint --fix` to
-    automatically fix some of those errors.
--   `yarn test`: Make sure all tests pass.
+Need help or want to contribute ideas or code? Head over to our [CONTRIBUTING](CONTRIBUTING.md) doc for more information.
