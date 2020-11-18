@@ -359,12 +359,17 @@ export class BlocksService extends AbstractService {
 			}
 		);
 
+		let perByteStr: string = perByte.toString();
+		if (block.header.number.toNumber() < 515500) {
+			perByteStr = "1000000000";
+		}
+
 		return {
 			calcFee: CalcFee.from_params(
 				coefficients,
 				BigInt(extrinsicBaseWeight.toString()),
 				multiplier.toString(),
-				perByte.toString(),
+				perByteStr,
 				specName,
 				specVersion
 			),

@@ -1,3 +1,7 @@
 {
-  "CUSTOM_TYPES": {}
+  "CUSTOM_TYPES": {
+    "ChainId": "u8",
+    "ResourceId": "[u8; 32]",
+    "DepositNonce": "u64"
+  }
 }
