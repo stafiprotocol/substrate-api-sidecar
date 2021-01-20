@@ -9,13 +9,6 @@ import {
 import { AbstractService } from '../AbstractService';
 
 export class ErasRewardPointsService extends AbstractService {
-	/**
-	 * Fetch ErasRewardPoints.
-	 *
-	 * @param hash `BlockHash` to make call at
-	 * @param depth number of eras to query at and below the specified era
-	 * @param era the most recent era to query
-	 */
 	async fetchErasRewardPoints(
 		hash: BlockHash,
 		depth: number,
