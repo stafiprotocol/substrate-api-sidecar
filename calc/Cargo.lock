@@ -33,8 +33,8 @@ dependencies = [
  "log",
  "serde",
  "serde_derive",
- "sp-arithmetic 2.0.0-rc6 (git+https://github.com/paritytech/substrate?rev=896d4df8336ae6e6fb6eeaafce58818b42a04add)",
  "sp-arithmetic 2.0.0-rc6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sp-arithmetic 2.0.0-rc6 (git+https://github.com/paritytech/substrate?rev=896d4df8336ae6e6fb6eeaafce58818b42a04add)",
  "wasm-bindgen",
 ]
 
@@ -196,18 +196,6 @@ dependencies = [
 [[package]]
 name = "sp-arithmetic"
 version = "2.0.0-rc6"
-source = "git+https://github.com/paritytech/substrate?rev=896d4df8336ae6e6fb6eeaafce58818b42a04add#896d4df8336ae6e6fb6eeaafce58818b42a04add"
-dependencies = [
- "integer-sqrt",
- "num-traits",
- "parity-scale-codec",
- "sp-debug-derive 2.0.0-rc6 (git+https://github.com/paritytech/substrate?rev=896d4df8336ae6e6fb6eeaafce58818b42a04add)",
- "sp-std 2.0.0-rc6 (git+https://github.com/paritytech/substrate?rev=896d4df8336ae6e6fb6eeaafce58818b42a04add)",
-]
-
-[[package]]
-name = "sp-arithmetic"
-version = "2.0.0-rc6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f861e78b2de65df52d855ff668a00890160ab66afa25e8203f4240152e89085"
 dependencies = [
@@ -219,13 +207,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-debug-derive"
+name = "sp-arithmetic"
 version = "2.0.0-rc6"
 source = "git+https://github.com/paritytech/substrate?rev=896d4df8336ae6e6fb6eeaafce58818b42a04add#896d4df8336ae6e6fb6eeaafce58818b42a04add"
 dependencies = [
- "proc-macro2",
- "quote",
- "syn",
+ "integer-sqrt",
+ "num-traits",
+ "parity-scale-codec",
+ "sp-debug-derive 2.0.0-rc6 (git+https://github.com/paritytech/substrate?rev=896d4df8336ae6e6fb6eeaafce58818b42a04add)",
+ "sp-std 2.0.0-rc6 (git+https://github.com/paritytech/substrate?rev=896d4df8336ae6e6fb6eeaafce58818b42a04add)",
 ]
 
 [[package]]
@@ -240,15 +230,25 @@ dependencies = [
 ]
 
 [[package]]
-name = "sp-std"
+name = "sp-debug-derive"
 version = "2.0.0-rc6"
 source = "git+https://github.com/paritytech/substrate?rev=896d4df8336ae6e6fb6eeaafce58818b42a04add#896d4df8336ae6e6fb6eeaafce58818b42a04add"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "sp-std"
 version = "2.0.0-rc6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd69654cdd9fa179dad52811220356dc2991f70b3b93e77c27f4e317d58c059b"
+
+[[package]]
+name = "sp-std"
+version = "2.0.0-rc6"
+source = "git+https://github.com/paritytech/substrate?rev=896d4df8336ae6e6fb6eeaafce58818b42a04add#896d4df8336ae6e6fb6eeaafce58818b42a04add"
 
 [[package]]
 name = "syn"
