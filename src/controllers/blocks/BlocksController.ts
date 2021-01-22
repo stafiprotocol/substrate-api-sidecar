@@ -5,6 +5,10 @@ import { BlocksService } from '../../services';
 import { INumberParam } from '../../types/requests';
 import AbstractController from '../AbstractController';
 
+interface ControllerOptions {
+	finalizes: boolean;
+}
+
 /**
  * GET a block.
  *
@@ -38,7 +42,9 @@ import AbstractController from '../AbstractController';
  *   - `method`: Extrinsic method.
  *   - `signature`: Object with `signature` and `signer`, or `null` if unsigned.
  *   - `nonce`: Account nonce, if applicable.
- *   - `args`: Array of arguments.
+ *   - `args`: Array of arguments. Note: if you are expecting an [`OpaqueCall`](https://substrate.dev/rustdocs/v2.0.0/pallet_multisig/type.OpaqueCall.html)
+ * 			and it is not decoded in the response (i.e. it is just a hex string), then Sidecar was not
+ * 			able to decode it and likely that it is not a valid call for the runtime.
  *   - `tip`: Any tip added to the transaction.
  *   - `hash`: The transaction's hash.
  *   - `info`: `RuntimeDispatchInfo` for the transaction. Includes the `partialFee`.
@@ -62,10 +68,8 @@ import AbstractController from '../AbstractController';
  * - `OnInitialize`: https://crates.parity.io/frame_support/traits/trait.OnInitialize.html
  * - `OnFinalize`: https://crates.parity.io/frame_support/traits/trait.OnFinalize.html
  */
-export default class BlocksController extends AbstractController<
-	BlocksService
-> {
-	constructor(api: ApiPromise) {
+export default class BlocksController extends AbstractController<BlocksService> {
+	constructor(api: ApiPromise, private readonly options: ControllerOptions) {
 		super(api, '/blocks', new BlocksService(api));
 		this.initRoutes();
 	}
@@ -91,7 +95,7 @@ export default class BlocksController extends AbstractController<
 		const extrsinsicDocsArg = extrinsicDocs === 'true';
 
 		const hash =
-			finalized === 'false'
+			finalized === 'false' || !this.options.finalizes
 				? (await this.api.rpc.chain.getHeader()).hash
 				: await this.api.rpc.chain.getFinalizedHead();
 

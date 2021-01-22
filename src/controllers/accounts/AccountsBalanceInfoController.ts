@@ -39,9 +39,7 @@ import AbstractController from '../AbstractController';
  * - `AccountData`: https://crates.parity.io/pallet_balances/struct.AccountData.html
  * - `BalanceLock`: https://crates.parity.io/pallet_balances/struct.BalanceLock.html
  */
-export default class AccountsBalanceController extends AbstractController<
-	AccountsBalanceInfoService
-> {
+export default class AccountsBalanceController extends AbstractController<AccountsBalanceInfoService> {
 	constructor(api: ApiPromise) {
 		super(
 			api,
@@ -64,14 +62,19 @@ export default class AccountsBalanceController extends AbstractController<
 	 * @param res Express Response
 	 */
 	private getAccountBalanceInfo: RequestHandler<IAddressParam> = async (
-		{ params: { address }, query: { at } },
+		{ params: { address }, query: { at, token } },
 		res
 	): Promise<void> => {
+		const tokenArg =
+			typeof token === 'string'
+				? token.toUpperCase()
+				: this.api.registry.chainToken;
+
 		const hash = await this.getHashFromAt(at);
 
 		AccountsBalanceController.sanitizedSend(
 			res,
-			await this.service.fetchAccountBalanceInfo(hash, address)
+			await this.service.fetchAccountBalanceInfo(hash, address, tokenArg)
 		);
 	};
 }

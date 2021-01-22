@@ -1,9 +1,12 @@
 import { ApiPromise } from '@polkadot/api';
+import { expandMetadata } from '@polkadot/metadata/decorate';
 import { GenericCall, Struct } from '@polkadot/types';
+import { AbstractInt } from '@polkadot/types/codec/AbstractInt';
 import {
 	AccountId,
 	Block,
 	BlockHash,
+	BlockWeights,
 	Digest,
 	DispatchInfo,
 	EventRecord,
@@ -13,6 +16,7 @@ import { AnyJson, Codec, Registry } from '@polkadot/types/types';
 import { u8aToHex } from '@polkadot/util';
 import { blake2AsU8a } from '@polkadot/util-crypto';
 import { CalcFee } from '@substrate/calc';
+import { InternalServerError } from 'http-errors';
 
 import {
 	IBlock,
@@ -45,11 +49,19 @@ export class BlocksService extends AbstractService {
 	): Promise<IBlock> {
 		const { api } = this;
 
-		const [{ block }, events, validators] = await Promise.all([
-			api.rpc.chain.getBlock(hash),
-			this.fetchEvents(api, hash),
-			api.query.session.validators.at(hash),
-		]);
+		let block, events, sessionValidators;
+		if (typeof api.query.session?.validators?.at === 'function') {
+			[{ block }, events, sessionValidators] = await Promise.all([
+				api.rpc.chain.getBlock(hash),
+				this.fetchEvents(api, hash),
+				api.query.session.validators.at(hash),
+			]);
+		} else {
+			[{ block }, events] = await Promise.all([
+				api.rpc.chain.getBlock(hash),
+				this.fetchEvents(api, hash),
+			]);
+		}
 
 		const {
 			parentHash,
@@ -59,11 +71,11 @@ export class BlocksService extends AbstractService {
 			digest,
 		} = block.header;
 
-		const authorId = this.extractAuthor(validators, digest);
+		const authorId = sessionValidators
+			? this.extractAuthor(sessionValidators, digest)
+			: undefined;
 
-		const logs = digest.logs.map((log) => {
-			const { type, index, value } = log;
-
+		const logs = digest.logs.map(({ type, index, value }) => {
 			return { type, index, value };
 		});
 
@@ -212,15 +224,16 @@ export class BlocksService extends AbstractService {
 				tip,
 			} = extrinsic;
 			const hash = u8aToHex(blake2AsU8a(extrinsic.toU8a(), 256));
+			const call = block.registry.createType('Call', method);
 
 			return {
 				method: {
-					pallet: method.sectionName,
-					method: method.methodName,
+					pallet: method.section,
+					method: method.method,
 				},
 				signature: isSigned ? { signature, signer } : null,
 				nonce: isSigned ? nonce : null,
-				args: this.parseGenericCall(method, block.registry).args,
+				args: this.parseGenericCall(call, block.registry).args,
 				tip: isSigned ? tip : null,
 				hash,
 				info: {},
@@ -316,7 +329,7 @@ export class BlocksService extends AbstractService {
 	}
 
 	/**
-	 * Create calcFee from params.
+	 * Create calcFee from params or return `null` if calcFee cannot be created.
 	 *
 	 * @param api ApiPromise
 	 * @param parentHash Hash of the parent block
@@ -327,51 +340,116 @@ export class BlocksService extends AbstractService {
 		parentHash: Hash,
 		block: Block
 	) {
-		let parentParentHash: Hash;
-		if (block.header.number.toNumber() > 1) {
-			parentParentHash = (await api.rpc.chain.getHeader(parentHash))
-				.parentHash;
+		const perByte = api.consts.transactionPayment?.transactionByteFee;
+		const extrinsicBaseWeightExists =
+			api.consts.system.extrinsicBaseWeight ||
+			api.consts.system.blockWeights.perClass.normal.baseExtrinsic;
+
+		let calcFee, specName, specVersion;
+		if (
+			perByte === undefined ||
+			extrinsicBaseWeightExists === undefined ||
+			typeof api.query.transactionPayment?.nextFeeMultiplier?.at !==
+				'function'
+		) {
+			// We do not have the necessary materials to build calcFee, so we just give a dummy function
+			// that aligns with the expected API of calcFee.
+			calcFee = { calc_fee: () => null };
+
+			const version = await api.rpc.state.getRuntimeVersion(parentHash);
+			[specVersion, specName] = [
+				version.specName.toString(),
+				version.specVersion.toNumber(),
+			];
 		} else {
-			parentParentHash = parentHash;
-		}
+			const coefficients = api.consts.transactionPayment.weightToFee.map(
+				(c) => {
+					return {
+						// Anything that could overflow Number.MAX_SAFE_INTEGER needs to be serialized
+						// to BigInt or string.
+						coeffInteger: c.coeffInteger.toString(10),
+						coeffFrac: c.coeffFrac.toNumber(),
+						degree: c.degree.toNumber(),
+						negative: c.negative,
+					};
+				}
+			);
 
-		const perByte = api.consts.transactionPayment.transactionByteFee;
-		const extrinsicBaseWeight = api.consts.system.extrinsicBaseWeight;
-		const multiplier = await api.query.transactionPayment.nextFeeMultiplier.at(
-			parentHash
-		);
-		// The block where the runtime is deployed falsely proclaims it would
-		// be already using the new runtime. This workaround therefore uses the
-		// parent of the parent in order to determine the correct runtime under which
-		// this block was produced.
-		const version = await api.rpc.state.getRuntimeVersion(parentParentHash);
-		const specName = version.specName.toString();
-		const specVersion = version.specVersion.toNumber();
-		const coefficients = api.consts.transactionPayment.weightToFee.map(
-			(c) => {
-				return {
-					coeffInteger: c.coeffInteger.toString(),
-					coeffFrac: c.coeffFrac,
-					degree: c.degree,
-					negative: c.negative,
-				};
+			// The block where the runtime is deployed falsely proclaims it would
+			// be already using the new runtime. This workaround therefore uses the
+			// parent of the parent in order to determine the correct runtime under which
+			// this block was produced.
+			let parentParentHash: Hash;
+			if (block.header.number.toNumber() > 1) {
+				parentParentHash = (await api.rpc.chain.getHeader(parentHash))
+					.parentHash;
+			} else {
+				parentParentHash = parentHash;
 			}
-		);
 
-		let perByteStr: string = perByte.toString();
-		if (block.header.number.toNumber() < 515500) {
-			perByteStr = "1000000000";
-		}
+			const [version, multiplier] = await Promise.all([
+				api.rpc.state.getRuntimeVersion(parentParentHash),
+				api.query.transactionPayment.nextFeeMultiplier.at(parentHash),
+			]);
 
-		return {
-			calcFee: CalcFee.from_params(
+			[specName, specVersion] = [
+				version.specName.toString(),
+				version.specVersion.toNumber(),
+			];
+
+			// This `extrinsicBaseWeight` changed from using system.extrinsicBaseWeight => system.blockWeights.perClass.normal.baseExtrinsic
+			// in polkadot v0.8.27 due to this pr: https://github.com/paritytech/substrate/pull/6629 .
+			// TODO https://github.com/paritytech/substrate-api-sidecar/issues/393 .
+			// TODO once https://github.com/polkadot-js/api/issues/2365 is resolved we can use that instead.
+			let extrinsicBaseWeight;
+			if (
+				specName !== api.runtimeVersion.specName.toString() ||
+				specVersion !== api.runtimeVersion.specVersion.toNumber()
+			) {
+				// We are in a runtime that does **not** match the decorated metadata in the api,
+				// so we must fetch the correct metadata, decorate it and pull out the constant
+				const metadata = await api.rpc.state.getMetadata(
+					parentParentHash
+				);
+				const decorated = expandMetadata(api.registry, metadata);
+
+				extrinsicBaseWeight =
+					((decorated.consts.system
+						?.extrinsicBaseWeight as unknown) as AbstractInt) ||
+					((decorated.consts.system
+						?.blockWeights as unknown) as BlockWeights).perClass
+						?.normal?.baseExtrinsic;
+			} else {
+				// We are querying a runtime that matches the decorated metadata in the api
+				extrinsicBaseWeight =
+					(api.consts.system?.extrinsicBaseWeight as AbstractInt) ||
+					api.consts.system.blockWeights.perClass?.normal
+						?.baseExtrinsic;
+			}
+
+			if (!extrinsicBaseWeight) {
+				throw new InternalServerError(
+					'`extrinsicBaseWeight` is not defined when it was expected to be defined. File an issue at https://github.com/paritytech/substrate-api-sidecar/issues'
+				);
+			}
+
+			let perByteStr: string = perByte.toString(10);
+			if (block.header.number.toNumber() < 515500) {
+				perByteStr = "1000000000";
+			}	
+
+			calcFee = CalcFee.from_params(
 				coefficients,
-				BigInt(extrinsicBaseWeight.toString()),
-				multiplier.toString(),
+				extrinsicBaseWeight.toBigInt(),
+				multiplier.toString(10),
 				perByteStr,
 				specName,
 				specVersion
-			),
+			);
+		}
+
+		return {
+			calcFee,
 			specName,
 			specVersion,
 		};
@@ -425,7 +503,6 @@ export class BlocksService extends AbstractService {
 		genericCall: GenericCall,
 		registry: Registry
 	): ISanitizedCall {
-		const { sectionName, methodName } = genericCall;
 		const newArgs = {};
 
 		// Pull out the struct of arguments to this call
@@ -453,8 +530,18 @@ export class BlocksService extends AbstractService {
 				) {
 					// multiSig.asMulti.args.call is an OpaqueCall (Vec<u8>) that we
 					// serialize to a polkadot-js Call and parse so it is not a hex blob.
-					const call = registry.createType('Call', argument.toHex());
-					newArgs[paramName] = this.parseGenericCall(call, registry);
+					try {
+						const call = registry.createType(
+							'Call',
+							argument.toHex()
+						);
+						newArgs[paramName] = this.parseGenericCall(
+							call,
+							registry
+						);
+					} catch {
+						newArgs[paramName] = argument;
+					}
 				} else {
 					newArgs[paramName] = argument;
 				}
@@ -463,35 +550,31 @@ export class BlocksService extends AbstractService {
 
 		return {
 			method: {
-				pallet: sectionName,
-				method: methodName,
+				pallet: genericCall.section,
+				method: genericCall.method,
 			},
 			args: newArgs,
 		};
 	}
 
-	// Almost exact mimic of https://github.com/polkadot-js/api/blob/master/packages/api-derive/src/chain/getHeader.ts#L27
+	// Almost exact mimic of https://github.com/polkadot-js/api/blob/e51e89df5605b692033df864aa5ab6108724af24/packages/api-derive/src/type/util.ts#L6
 	// but we save a call to `getHeader` by hardcoding the logic here and using the digest from the blocks header.
 	private extractAuthor(
 		sessionValidators: AccountId[],
 		digest: Digest
 	): AccountId | undefined {
 		const [pitem] = digest.logs.filter(({ type }) => type === 'PreRuntime');
-
 		// extract from the substrate 2.0 PreRuntime digest
 		if (pitem) {
 			const [engine, data] = pitem.asPreRuntime;
-
 			return engine.extractAuthor(data, sessionValidators);
 		} else {
 			const [citem] = digest.logs.filter(
 				({ type }) => type === 'Consensus'
 			);
-
 			// extract author from the consensus (substrate 1.0, digest)
 			if (citem) {
 				const [engine, data] = citem.asConsensus;
-
 				return engine.extractAuthor(data, sessionValidators);
 			}
 		}

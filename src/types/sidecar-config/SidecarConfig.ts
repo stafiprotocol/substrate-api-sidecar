@@ -1,3 +1,5 @@
+import { RegistryTypes } from '@polkadot/types/types';
+
 /**
  * Object to house the values of all the configurable components for Sidecar.
  */
@@ -9,11 +11,7 @@ export interface ISidecarConfig {
 
 interface ISidecarConfigSubstrate {
 	WS_URL: string;
-	CUSTOM_TYPES: Record<string, string | Record<string, string> | {
-		_enum: string[] | Record<string, string | null>;
-	} | {
-		_set: Record<string, number>;
-	}>;
+	CUSTOM_TYPES: RegistryTypes | undefined;
 }
 
 interface ISidecarConfigExpress {

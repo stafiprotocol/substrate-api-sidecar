@@ -13,7 +13,7 @@ import {
 	StakingLedger,
 } from '@polkadot/types/interfaces';
 
-import { decoratedPolkadotMetadata } from '../../../test-helpers/metadata/decorated';
+import { polkadotMetadata } from '../../../test-helpers/metadata/metadata';
 import { polkadotRegistry } from '../../../test-helpers/registries';
 import {
 	balancesTransferValid,
@@ -37,26 +37,42 @@ const chain = () =>
 
 export const getBlock = (_hash: Hash): Promise<{ block: Block }> =>
 	Promise.resolve().then(() => {
-		return { block: mockBlock789629 };
+		return {
+			block: mockBlock789629,
+		};
+	});
+
+export const deriveGetBlock = (
+	_hash: Hash
+): Promise<{ block: Block; author: AccountId }> =>
+	Promise.resolve().then(() => {
+		return {
+			author: polkadotRegistry.createType(
+				'AccountId',
+				'1zugcajGg5yDD9TEqKKzGx7iKuGWZMkRbYcyaFnaUaEkwMK'
+			),
+			block: mockBlock789629,
+		};
 	});
 
 const getHeader = (_hash: Hash) =>
 	Promise.resolve().then(() => mockBlock789629.header);
 
+const runtimeVersion = {
+	specName: polkadotRegistry.createType('Text', 'polkadot'),
+	specVersion: polkadotRegistry.createType('u32', 16),
+	transactionVersion: polkadotRegistry.createType('u32', 2),
+	implVersion: polkadotRegistry.createType('u32', 0),
+	implName: polkadotRegistry.createType('Text', 'parity-polkadot'),
+	authoringVersion: polkadotRegistry.createType('u32', 0),
+};
+
 const getRuntimeVersion = () =>
 	Promise.resolve().then(() => {
-		return {
-			specName: polkadotRegistry.createType('Text', 'polkadot'),
-			specVersion: polkadotRegistry.createType('u32', 16),
-			transactionVersion: polkadotRegistry.createType('u32', 2),
-			implVersion: polkadotRegistry.createType('u32', 0),
-			implName: polkadotRegistry.createType('Text', 'parity-polkadot'),
-			authoringVersion: polkadotRegistry.createType('u32', 0),
-		};
+		return runtimeVersion;
 	});
 
-const getMetadata = () =>
-	Promise.resolve().then(() => decoratedPolkadotMetadata.metadata);
+const getMetadata = () => Promise.resolve().then(() => polkadotMetadata);
 
 const deriveGetHeader = () =>
 	Promise.resolve().then(() => {
@@ -255,14 +271,21 @@ export const pendingExtrinsics = (): Promise<Vec<Extrinsic>> =>
 export const tx = (): Extrinsic =>
 	polkadotRegistry.createType('Extrinsic', balancesTransferValid);
 
+const referendumInfoOfAt = () =>
+	Promise.resolve().then(() => {
+		polkadotRegistry.createType('ReferendumInfo');
+	});
+
 /**
  * Mock polkadot-js ApiPromise. Values are largely meant to be accurate for block
  * #789629, which is what most Service unit tests are based on.
  */
 export const mockApi = ({
+	runtimeVersion,
 	createType: polkadotRegistry.createType.bind(polkadotRegistry),
 	registry: polkadotRegistry,
 	tx,
+	runtimeMetadata: polkadotMetadata,
 	query: {
 		babe: {
 			currentSlot: { at: currentSlotAt },
@@ -298,6 +321,9 @@ export const mockApi = ({
 		vesting: {
 			vesting: { at: vestingAt },
 		},
+		democracy: {
+			referendumInfoOf: { at: referendumInfoOfAt },
+		},
 	},
 	consts: {
 		babe: {
@@ -307,9 +333,9 @@ export const mockApi = ({
 			transactionByteFee: polkadotRegistry.createType('Balance', 1000000),
 			weightToFee: [
 				{
-					coeffFrac: 80000000,
-					coeffInteger: 0,
-					degree: 1,
+					coeffFrac: polkadotRegistry.createType('Perbill', 80000000),
+					coeffInteger: polkadotRegistry.createType('Balance', 0),
+					degree: polkadotRegistry.createType('u8', 1),
 					negative: false,
 				},
 			],
@@ -355,6 +381,7 @@ export const mockApi = ({
 	derive: {
 		chain: {
 			getHeader: deriveGetHeader,
+			getBlock: deriveGetBlock,
 		},
 	},
 } as unknown) as ApiPromise;
